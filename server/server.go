@@ -2,6 +2,7 @@
 package server
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"os"
@@ -21,6 +22,10 @@ func newClient(addr *net.UDPAddr) *Client {
 	return &Client{
 		Address: addr,
 	}
+}
+
+type fileRequest struct {
+	Filename string `json:"file_name"`
 }
 
 func (s *Server) sendVideo(c *Client, video []byte) error {
@@ -77,25 +82,31 @@ func (s *Server) StartServer() {
 
 func (s *Server) acceptLoop() {
 	//provides header for the request
-	req := make([]byte, 1024)
 
-	n, addr, err := s.Ln.ReadFromUDP(req)
-	if err != nil {
-		log.Println("Error accepting connection...")
+	for {
+		req := make([]byte, 1024)
+
+		n, addr, err := s.Ln.ReadFromUDP(req)
+		if err != nil {
+			log.Println("Error accepting connection...")
+		}
+		log.Println("Connected to addr", addr.IP)
+		var fileReq fileRequest
+		json.Unmarshal(req, &fileReq)
+		log.Println("bytes:", n, "Message received: ", fileReq)
+		client := newClient(addr)
+		// read the mp4 File
+		videoBytes, err := ReadVideo("../videos/big.mp4")
+		if err != nil {
+			log.Println("Error reading video", err)
+		}
+		err = s.sendVideo(client, videoBytes)
+		if err != nil {
+			log.Println("Error sending video", err)
+		}
+		log.Println("Video sent sucessfully")
 	}
-	log.Println("Connected to addr", addr.IP)
-	log.Println("bytes:", n, "Message received: ", string(req))
-	client := newClient(addr)
-	// read the mp4 File
-	videoBytes, err := ReadVideo("../videos/test.mp4")
-	if err != nil {
-		log.Println("Error reading video", err)
-	}
-	err = s.sendVideo(client, videoBytes)
-	if err != nil {
-		log.Println("Error sending video", err)
-	}
-	log.Println("Video sent sucessfully")
+
 }
 
 func ReadVideo(filename string) ([]byte, error) {
